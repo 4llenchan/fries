@@ -8,13 +8,25 @@
 #define FRIES_FUTURE_H
 
 #include <memory>
+#include <mutex>
+#include <condition_variable>
 
 namespace fries
 {
+enum FutureState
+{
+    waiting,
+    ready,
+};
+
 template<typename T>
-class FutureBase : public std::enable_shared_from_this<FutureBase<T>>
+class FutureImpl : public std::enable_shared_from_this<FutureImpl<T>>
 {
 public:
+    FutureImpl() : state_(waiting)
+    {
+    }
+
     T getValue() const
     {
         return value_;
@@ -25,8 +37,33 @@ public:
         value_ = value;
     }
 
+    FutureState getState() const
+    {
+        return state_;
+    }
+
+    void markFinish()
+    {
+        state_ = ready;
+        cv.notify_all();
+    }
+
+    void wait()
+    {
+        std::unique_lock<std::mutex> lck(mutex);
+        if (state_ != ready)
+        {
+            cv.wait(lck);
+        }
+    }
+
+public:
+    std::mutex mutex{};
+    std::condition_variable cv{};
+
 private:
     T value_;
+    FutureState state_;
 };
 
 template <typename T>
@@ -38,16 +75,26 @@ class Future
     friend class Promise<T>;
 
 public:
+    bool isReady() const
+    {
+        return future_->getState() == FutureState::ready;
+    }
+
+    void wait()
+    {
+        future_->wait();
+    }
+
     T getValue()
     {
         return future_->getValue();
     }
 private:
-    using FutureBasePtr = std::shared_ptr<FutureBase<T>>;
-    FutureBasePtr future_;
-    explicit Future(FutureBasePtr futureBase)
+    using FutureImplPtr = std::shared_ptr<FutureImpl<T>>;
+    FutureImplPtr future_;
+    explicit Future(FutureImplPtr futureImpl)
     {
-        future_ = futureBase;
+        future_ = futureImpl;
     }
 };
 
@@ -55,7 +102,7 @@ template <typename T>
 class Promise
 {
 public:
-    Promise() : future_(std::make_shared<FutureBase<T>>())
+    Promise() : future_(std::make_shared<FutureImpl<T>>())
     {
     }
 
@@ -66,11 +113,13 @@ public:
 
     void setValue(T value)
     {
-        future_->setValue(value);
+        std::unique_lock<std::mutex> lck(future_->mutex);
+        future_->setValue(std::move(value));
+        future_->markFinish();
     }
 private:
-    using FutureBasePtr = std::shared_ptr<FutureBase<T>>;
-    FutureBasePtr future_;
+    using FutureImplPtr = std::shared_ptr<FutureImpl<T>>;
+    FutureImplPtr future_;
 };
 
 }
