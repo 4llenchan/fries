@@ -10,16 +10,24 @@ int main()
     auto p = std::make_shared<Promise<int>>();
     auto f = p->getFuture();
 
-    thread th([p](){
+    thread th([p]() {
         this_thread::sleep_for(chrono::seconds(2));
         p->setValue(20);
     });
     th.detach();
 
-    f.wait();
+    auto finalFuture = f.then([](const Future<int> &future) {
+        cout << "1. " << future.getValue() << endl;
+        return string("hello");
+    }).then([](const Future<string> &future) {
+        cout << "2. " << future.getValue() << endl;
+        return 10;
+    }).then([](const Future<int> &future) {
+        cout << "3. " << future.getValue() << endl;
+        return nullptr;
+    });
 
-    std::cout << f.isReady() << std::endl;
-    std::cout << f.getValue() << std::endl;
+    finalFuture.wait();
 
     return 0;
 }

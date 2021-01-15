@@ -13,114 +13,153 @@
 
 namespace fries
 {
-enum FutureState
-{
-    waiting,
-    ready,
-};
-
-template<typename T>
-class FutureImpl : public std::enable_shared_from_this<FutureImpl<T>>
-{
-public:
-    FutureImpl() : state_(waiting)
+    enum FutureState
     {
-    }
+        waiting,
+        ready,
+    };
 
-    T getValue() const
-    {
-        return value_;
-    }
+    template<typename T>
+    class Promise;
 
-    void setValue(T value)
-    {
-        value_ = value;
-    }
+    template<typename T>
+    class Future;
 
-    FutureState getState() const
+    template<typename T>
+    class FutureImpl : public std::enable_shared_from_this<FutureImpl<T>>
     {
-        return state_;
-    }
+    public:
+        using FutureImplPtr = std::shared_ptr<FutureImpl<T>>;
+        using FutureCompletionCallback = std::function<void(FutureImplPtr)>;
 
-    void markFinish()
-    {
-        state_ = ready;
-        cv.notify_all();
-    }
-
-    void wait()
-    {
-        std::unique_lock<std::mutex> lck(mutex);
-        if (state_ != ready)
+        FutureImpl() : state_(waiting), callback_(nullptr)
         {
-            cv.wait(lck);
         }
-    }
 
-public:
-    std::mutex mutex{};
-    std::condition_variable cv{};
+        T getValue() const
+        {
+            return value_;
+        }
 
-private:
-    T value_;
-    FutureState state_;
-};
+        void setValue(T value)
+        {
+            std::unique_lock<std::mutex> lck(mutex);
+            value_ = value;
+            state_ = ready;
+            cv.notify_all();
+            if (callback_) {
+                callback_(this->shared_from_this());
+            }
+        }
 
-template <typename T>
-class Promise;
+        FutureState getState() const
+        {
+            return state_;
+        }
 
-template <typename T>
-class Future
-{
-    friend class Promise<T>;
+        void wait()
+        {
+            std::unique_lock<std::mutex> lck(mutex);
+            if (state_ != ready) {
+                cv.wait(lck);
+            }
+        }
 
-public:
-    bool isReady() const
+        void setCallback(const FutureCompletionCallback &callback)
+        {
+            callback_ = callback;
+        }
+
+    public:
+        std::mutex mutex{};
+        std::condition_variable cv{};
+
+    private:
+        T value_;
+        FutureState state_;
+        FutureCompletionCallback callback_;
+    };
+
+    template<typename T>
+    class Future
     {
-        return future_->getState() == FutureState::ready;
-    }
+        friend class Promise<T>;
 
-    void wait()
-    {
-        future_->wait();
-    }
+        using FutureImplPtr = std::shared_ptr<FutureImpl<T>>;
 
-    T getValue()
-    {
-        return future_->getValue();
-    }
-private:
-    using FutureImplPtr = std::shared_ptr<FutureImpl<T>>;
-    FutureImplPtr future_;
-    explicit Future(FutureImplPtr futureImpl)
-    {
-        future_ = futureImpl;
-    }
-};
+    public:
+        Future()
+        = default;
 
-template <typename T>
-class Promise
-{
-public:
-    Promise() : future_(std::make_shared<FutureImpl<T>>())
-    {
-    }
+        Future(Future<T> &future)
+        {
+            future_ = future.future_;
+        }
 
-    Future<T> getFuture()
-    {
-        return Future<T>(future_);
-    }
+        Future(Future<T> &&future) noexcept
+        {
+            future_ = future.future_;
+            future.future_.reset();
+        }
 
-    void setValue(T value)
+        explicit Future(FutureImplPtr futureImpl)
+        {
+            future_ = futureImpl;
+        }
+
+        bool isReady() const
+        {
+            return future_->getState() == FutureState::ready;
+        }
+
+        void wait() const
+        {
+            future_->wait();
+        }
+
+        T getValue() const
+        {
+            return future_->getValue();
+        }
+
+        template<typename F>
+        Future<typename std::result_of<F(Future<T>)>::type> then(const F &func)
+        {
+            using NextType = typename std::result_of<F(Future<T>)>::type;
+            auto nextFutureImpl = std::make_shared<FutureImpl<NextType>>();
+            // create a callable object to fulfill next future
+            future_->setCallback([func, nextFutureImpl](FutureImplPtr futureImpl) {
+                nextFutureImpl->setValue(func(Future<T>(futureImpl)));
+            });
+            return std::move(Future<NextType>(nextFutureImpl));
+        }
+
+    private:
+        FutureImplPtr future_;
+    };
+
+    template<typename T>
+    class Promise
     {
-        std::unique_lock<std::mutex> lck(future_->mutex);
-        future_->setValue(std::move(value));
-        future_->markFinish();
-    }
-private:
-    using FutureImplPtr = std::shared_ptr<FutureImpl<T>>;
-    FutureImplPtr future_;
-};
+    public:
+        Promise() : future_(std::make_shared<FutureImpl<T>>())
+        {
+        }
+
+        Future<T> getFuture()
+        {
+            return Future<T>(future_);
+        }
+
+        void setValue(T value)
+        {
+            future_->setValue(std::move(value));
+        }
+
+    private:
+        using FutureImplPtr = std::shared_ptr<FutureImpl<T>>;
+        FutureImplPtr future_;
+    };
 
 }
 
