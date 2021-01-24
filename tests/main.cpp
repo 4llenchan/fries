@@ -24,10 +24,29 @@ int main()
         return 10;
     }).then([](const Future<int> &future) {
         cout << "3. " << future.getValue() << endl;
-        return nullptr;
+    }).then([](const Future<void> &future) {
+        cout << "4. void" << endl;
     });
 
+    cout << "ready state before wait:" << finalFuture.isReady() << endl;
+
     finalFuture.wait();
+
+    cout << "ready state after wait:" << finalFuture.isReady() << endl;
+
+
+    auto pv = make_shared<Promise<void>>();
+    auto fv = pv->getFuture();
+
+    thread thv([pv]() {
+        this_thread::sleep_for(chrono::seconds(2));
+        pv->setValue();
+    });
+    thv.detach();
+
+    fv.then([](const Future<void> &future) {
+        cout << "void" << endl;
+    }).wait();
 
     return 0;
 }
