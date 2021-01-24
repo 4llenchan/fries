@@ -20,12 +20,16 @@ namespace fries
         ready,
     };
 
+    // forward definitions
     template<typename T>
     class Promise;
 
     template<typename T>
     class Future;
 
+    /**
+     * Future implementation class
+     */
     template<typename T>
     class FutureImpl : public std::enable_shared_from_this<FutureImpl<T>>
     {
@@ -48,9 +52,7 @@ namespace fries
             value_ = value;
             state_ = ready;
             cv.notify_all();
-            if (callback_) {
-                callback_(this->shared_from_this());
-            }
+            triggerCallback();
         }
 
         FutureState getState() const
@@ -68,7 +70,15 @@ namespace fries
 
         void setCallback(const FutureCompletionCallback &callback)
         {
+            /*
+             * set value and set callback could happen in the same time in different thread.
+             * we still want to trigger the callback even if the state is ready.
+             */
+            std::unique_lock<std::mutex> lck(mutex);
             callback_ = callback;
+            if (state_ == ready) {
+                triggerCallback();
+            }
         }
 
         template<typename F, typename R>
@@ -85,10 +95,18 @@ namespace fries
         T value_;
         FutureState state_;
         FutureCompletionCallback callback_;
+
+        void triggerCallback()
+        {
+            if (callback_) {
+                callback_(this->shared_from_this());
+            }
+        }
     };
 
-
-    // implementation for void type
+    /**
+     * Future implementation class for void type
+     */
     template<>
     class FutureImpl<void> : public std::enable_shared_from_this<FutureImpl<void>>
     {
@@ -105,9 +123,7 @@ namespace fries
             std::unique_lock<std::mutex> lck(mutex);
             state_ = ready;
             cv.notify_all();
-            if (callback_) {
-                callback_(this->shared_from_this());
-            }
+            triggerCallback();
         }
 
         void getValue()
@@ -129,7 +145,15 @@ namespace fries
 
         void setCallback(const FutureCompletionCallback &callback)
         {
+            /*
+             * set value and set callback could happen in the same time in different thread.
+             * we still want to trigger the callback even if the state is ready.
+             */
+            std::unique_lock<std::mutex> lck(mutex);
             callback_ = callback;
+            if (state_ == ready) {
+                triggerCallback();
+            }
         }
 
         template<typename F, typename R>
@@ -146,9 +170,18 @@ namespace fries
     private:
         FutureState state_;
         FutureCompletionCallback callback_;
+
+        void triggerCallback()
+        {
+            if (callback_) {
+                callback_(this->shared_from_this());
+            }
+        }
     };
 
-    // implementation for void type
+    /**
+     * Future interface class for void type
+     */
     template<>
     class Future<void>
     {
@@ -194,6 +227,7 @@ namespace fries
         template<typename F>
         Future<typename std::result_of<F(Future<void>)>::type> then(const F &func)
         {
+            // TODO: what if the state is already ready?
             using NextType = typename std::result_of<F(Future<void>)>::type;
             auto nextFutureImpl = std::make_shared<FutureImpl<NextType>>();
             // create a callable object to fulfill next future
@@ -207,6 +241,9 @@ namespace fries
         FutureImplPtr future_;
     };
 
+    /**
+     * Future interface class
+     */
     template<typename T>
     class Future
     {
@@ -265,7 +302,9 @@ namespace fries
         FutureImplPtr future_;
     };
 
-    // implementation for void type
+    /**
+     * Promise interface class for void type
+     */
     template<>
     class Promise<void>
     {
@@ -289,6 +328,9 @@ namespace fries
         FutureImplPtr future_;
     };
 
+    /**
+     * Promise interface class
+     */
     template<typename T>
     class Promise
     {

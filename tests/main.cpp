@@ -34,18 +34,16 @@ int main()
 
     cout << "ready state after wait:" << finalFuture.isReady() << endl;
 
-
+    // test set value before then
     auto pv = make_shared<Promise<void>>();
     auto fv = pv->getFuture();
 
-    thread thv([pv]() {
-        this_thread::sleep_for(chrono::seconds(2));
-        pv->setValue();
-    });
-    thv.detach();
+    pv->setValue();
 
     fv.then([](const Future<void> &future) {
-        cout << "void" << endl;
+        cout << "void1" << endl;
+    }).then([](const Future<void> &future) {
+        cout << "void2" << endl;
     }).wait();
 
     return 0;
