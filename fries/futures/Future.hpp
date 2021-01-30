@@ -36,8 +36,10 @@ namespace fries
     public:
         using FutureImplPtr = std::shared_ptr<FutureImpl<T>>;
         using FutureCompletionCallback = std::function<void(FutureImplPtr)>;
+        using FutureExceptionCallback = std::function<void(std::exception)>;
 
-        FutureImpl() : state_(waiting), callback_(nullptr)
+        FutureImpl()
+                : hasException_(false), state_(waiting), completionCallback_(nullptr), exceptionCallback_(nullptr)
         {
         }
 
@@ -49,15 +51,45 @@ namespace fries
         void setValue(T value)
         {
             std::unique_lock<std::mutex> lck(mutex);
+            // set value has no effect when the state is ready
+            if (state_ == ready) {
+                return;
+            }
             value_ = value;
             state_ = ready;
             cv.notify_all();
             triggerCallback();
         }
 
+        void setException(const std::exception &exception)
+        {
+            std::unique_lock<std::mutex> lck(mutex);
+            // set value has no effect when the state is ready
+            if (state_ == ready) {
+                return;
+            }
+            exception_ = exception;
+            hasException_ = true;
+            state_ = ready;
+            cv.notify_all();
+            if (exceptionCallback_) {
+                exceptionCallback_(exception_);
+            }
+        }
+
+        const std::exception &getException() const
+        {
+            return exception_;
+        }
+
         FutureState getState() const
         {
             return state_;
+        }
+
+        bool hasException() const
+        {
+            return hasException_;
         }
 
         void wait()
@@ -68,16 +100,25 @@ namespace fries
             }
         }
 
-        void setCallback(const FutureCompletionCallback &callback)
+        void setCompletionCallback(const FutureCompletionCallback &callback)
         {
             /*
              * set value and set callback could happen in the same time in different thread.
              * we still want to trigger the callback even if the state is ready.
              */
             std::unique_lock<std::mutex> lck(mutex);
-            callback_ = callback;
+            completionCallback_ = callback;
             if (state_ == ready) {
                 triggerCallback();
+            }
+        }
+
+        void setExceptionCallback(const FutureExceptionCallback &callback)
+        {
+            std::unique_lock<std::mutex> lck(mutex);
+            exceptionCallback_ = callback;
+            if (state_ == ready) {
+                // TODO:
             }
         }
 
@@ -87,19 +128,29 @@ namespace fries
             setValue(func(std::move(Future<R>(future))));
         }
 
+        void applyException(const std::function<void(std::exception)> &func, const std::exception &exception)
+        {
+            // TODO: how to classify the specific kind of exception?
+            func(exception);
+            setException(exception);
+        }
+
     public:
         std::mutex mutex{};
         std::condition_variable cv{};
 
     private:
         T value_;
+        bool hasException_;
+        std::exception exception_;
         FutureState state_;
-        FutureCompletionCallback callback_;
+        FutureCompletionCallback completionCallback_;
+        FutureExceptionCallback exceptionCallback_;
 
         void triggerCallback()
         {
-            if (callback_) {
-                callback_(this->shared_from_this());
+            if (completionCallback_) {
+                completionCallback_(this->shared_from_this());
             }
         }
     };
@@ -113,8 +164,10 @@ namespace fries
     public:
         using FutureImplPtr = std::shared_ptr<FutureImpl<void>>;
         using FutureCompletionCallback = std::function<void(FutureImplPtr)>;
+        using FutureExceptionCallback = std::function<void(std::exception)>;
 
-        FutureImpl() : state_(waiting), callback_(nullptr)
+        FutureImpl()
+                : hasException_(false), state_(waiting), completionCallback_(nullptr), exceptionCallback_(nullptr)
         {
         }
 
@@ -135,6 +188,32 @@ namespace fries
             return state_;
         }
 
+        void setException(const std::exception &exception)
+        {
+            std::unique_lock<std::mutex> lck(mutex);
+            // set value has no effect when the state is ready
+            if (state_ == ready) {
+                return;
+            }
+            exception_ = exception;
+            hasException_ = true;
+            state_ = ready;
+            cv.notify_all();
+            if (exceptionCallback_) {
+                exceptionCallback_(exception_);
+            }
+        }
+
+        const std::exception &getException() const
+        {
+            return exception_;
+        }
+
+        bool hasException() const
+        {
+            return hasException_;
+        }
+
         void wait()
         {
             std::unique_lock<std::mutex> lck(mutex);
@@ -143,16 +222,25 @@ namespace fries
             }
         }
 
-        void setCallback(const FutureCompletionCallback &callback)
+        void setCompletionCallback(const FutureCompletionCallback &callback)
         {
             /*
              * set value and set callback could happen in the same time in different thread.
              * we still want to trigger the callback even if the state is ready.
              */
             std::unique_lock<std::mutex> lck(mutex);
-            callback_ = callback;
+            completionCallback_ = callback;
             if (state_ == ready) {
                 triggerCallback();
+            }
+        }
+
+        void setExceptionCallback(const FutureExceptionCallback &callback)
+        {
+            std::unique_lock<std::mutex> lck(mutex);
+            exceptionCallback_ = callback;
+            if (state_ == ready) {
+                // TODO:
             }
         }
 
@@ -163,18 +251,28 @@ namespace fries
             setValue();
         }
 
+        void applyException(const std::function<void(std::exception)> &func, const std::exception &exception)
+        {
+            // TODO: how to classify the specific kind of exception?
+            func(exception);
+            setException(exception);
+        }
+
     public:
         std::mutex mutex{};
         std::condition_variable cv{};
 
     private:
+        bool hasException_;
+        std::exception exception_;
         FutureState state_;
-        FutureCompletionCallback callback_;
+        FutureCompletionCallback completionCallback_;
+        FutureExceptionCallback exceptionCallback_;
 
         void triggerCallback()
         {
-            if (callback_) {
-                callback_(this->shared_from_this());
+            if (completionCallback_) {
+                completionCallback_(this->shared_from_this());
             }
         }
     };
@@ -224,17 +322,41 @@ namespace fries
             return future_->getValue();
         }
 
+        bool hasException() const
+        {
+            return future_->hasException();
+        }
+
+        const std::exception &getException() const
+        {
+            return future_->getException();
+        }
+
         template<typename F>
         Future<typename std::result_of<F(Future<void>)>::type> then(const F &func)
         {
-            // TODO: what if the state is already ready?
             using NextType = typename std::result_of<F(Future<void>)>::type;
             auto nextFutureImpl = std::make_shared<FutureImpl<NextType>>();
             // create a callable object to fulfill next future
-            future_->setCallback([func, nextFutureImpl](FutureImplPtr futureImpl) {
+            future_->setCompletionCallback([func, nextFutureImpl](FutureImplPtr futureImpl) {
                 nextFutureImpl->apply(func, std::move(futureImpl));
             });
+            future_->setExceptionCallback([nextFutureImpl](const std::exception &exception) {
+                nextFutureImpl->setException(exception);
+            });
             return std::move(Future<NextType>(nextFutureImpl));
+        }
+
+        Future<void> capture(const std::function<void(const std::exception &exception)> &func)
+        {
+            auto nextFutureImpl = std::make_shared<FutureImpl<void>>();
+            future_->setCompletionCallback([nextFutureImpl](const FutureImplPtr &futureImpl) {
+                nextFutureImpl->setValue();
+            });
+            future_->setExceptionCallback([func, nextFutureImpl](const std::exception &exception) {
+                nextFutureImpl->applyException(func, exception);
+            });
+            return std::move(Future<void>(nextFutureImpl));
         }
 
     private:
@@ -276,6 +398,16 @@ namespace fries
             return future_->getState() == FutureState::ready;
         }
 
+        bool hasException() const
+        {
+            return future_->hasException();
+        }
+
+        const std::exception &getException() const
+        {
+            return future_->getException();
+        }
+
         void wait() const
         {
             future_->wait();
@@ -292,10 +424,25 @@ namespace fries
             using NextType = typename std::result_of<F(Future<T>)>::type;
             auto nextFutureImpl = std::make_shared<FutureImpl<NextType>>();
             // create a callable object to fulfill next future
-            future_->setCallback([func, nextFutureImpl](FutureImplPtr futureImpl) {
+            future_->setCompletionCallback([func, nextFutureImpl](FutureImplPtr futureImpl) {
                 nextFutureImpl->apply(func, std::move(futureImpl));
             });
+            future_->setExceptionCallback([nextFutureImpl](const std::exception &exception) {
+                nextFutureImpl->setException(exception);
+            });
             return std::move(Future<NextType>(nextFutureImpl));
+        }
+
+        Future<void> capture(const std::function<void(const std::exception &exception)> &func)
+        {
+            auto nextFutureImpl = std::make_shared<FutureImpl<void>>();
+            future_->setCompletionCallback([nextFutureImpl](FutureImplPtr futureImpl) {
+                nextFutureImpl->setValue();
+            });
+            future_->setExceptionCallback([func, nextFutureImpl](const std::exception &exception) {
+                nextFutureImpl->applyException(func, exception);
+            });
+            return std::move(Future<void>(nextFutureImpl));
         }
 
     private:
@@ -323,6 +470,11 @@ namespace fries
             future_->setValue();
         }
 
+        void setException(const std::exception &exception)
+        {
+            future_->setException(exception);
+        }
+
     private:
         using FutureImplPtr = std::shared_ptr<FutureImpl<void>>;
         FutureImplPtr future_;
@@ -347,6 +499,11 @@ namespace fries
         void setValue(T value)
         {
             future_->setValue(std::move(value));
+        }
+
+        void setException(const std::exception &exception)
+        {
+            future_->setException(exception);
         }
 
     private:

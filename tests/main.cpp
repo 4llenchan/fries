@@ -11,7 +11,7 @@ int main()
     auto f = p->getFuture();
 
     thread th([p]() {
-        this_thread::sleep_for(chrono::seconds(2));
+        this_thread::sleep_for(chrono::seconds(1));
         p->setValue(20);
     });
     th.detach();
@@ -45,6 +45,31 @@ int main()
     }).then([](const Future<void> &future) {
         cout << "void2" << endl;
     }).wait();
+
+
+    // test exception
+    auto pe = make_shared<Promise<int>>();
+    auto fe = pe->getFuture();
+
+    auto feFinal = fe.then([](const Future<int> &future) {
+        cout << "pe value: " << future.getValue() << endl;
+    }).capture([](const std::exception &exception) {
+        cout << "pe exception: " << exception.what() << endl;
+    }).capture([](const std::exception &exception) {
+        cout << "pe exception2: " << exception.what() << endl;
+    });
+
+    thread te([pe]() {
+        this_thread::sleep_for(chrono::seconds(1));
+        pe->setException(exception());
+//        pe->setValue(10);
+    });
+    te.detach();
+
+    feFinal.wait();
+    if (feFinal.hasException()) {
+        cout << "e: " << feFinal.getException().what() << endl;
+    }
 
     return 0;
 }
