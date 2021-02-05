@@ -160,7 +160,11 @@ namespace fries
         template<typename F, typename R>
         void apply(const F &func, std::shared_ptr<FutureImpl<R>> future)
         {
-            setValue(func(std::move(Future<R>(future))));
+            try {
+                setValue(func(std::move(Future<R>(future))));
+            } catch (std::exception &e) {
+                setException(e);
+            }
         }
 
     private:
@@ -219,9 +223,13 @@ namespace fries
         template<typename F, typename R>
         void apply(const F &func, std::shared_ptr<FutureImpl<R>> future)
         {
-            func(std::move(Future<R>(future)));
-            setValue();
-        }
+            try {
+                func(std::move(Future<R>(future)));
+                setValue();
+            } catch (std::exception &e) {
+                setException(e);
+            }
+        } 
 
     private:
         FutureCompletionCallback completionCallback_ = nullptr;

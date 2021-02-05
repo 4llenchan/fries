@@ -53,16 +53,15 @@ int main()
 
     auto feFinal = fe.then([](const Future<int> &future) {
         cout << "pe value: " << future.getValue() << endl;
+        throw std::exception();
     }).capture([](const std::exception &exception) {
         cout << "pe exception: " << exception.what() << endl;
-    }).capture([](const std::exception &exception) {
-        cout << "pe exception2: " << exception.what() << endl;
     });
 
     thread te([pe]() {
         this_thread::sleep_for(chrono::seconds(1));
-        pe->setException(exception());
-//        pe->setValue(10);
+//        pe->setException(exception());
+        pe->setValue(10);
     });
     te.detach();
 
