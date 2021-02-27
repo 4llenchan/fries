@@ -21,10 +21,10 @@ namespace fries
     };
 
     // forward definitions
-    template<typename T>
+    template <typename T>
     class Promise;
 
-    template<typename T>
+    template <typename T>
     class Future;
 
     class FutureImplBase
@@ -32,24 +32,24 @@ namespace fries
     public:
         using FutureExceptionCallback = std::function<void(std::exception)>;
 
-        FutureImplBase()
-        = default;
+        FutureImplBase() = default;
 
-        virtual ~FutureImplBase()
-        = default;
+        virtual ~FutureImplBase() = default;
 
         void setException(const std::exception &exception)
         {
             std::unique_lock<std::mutex> lck(mutex_);
             // set value has no effect when the state is ready
-            if (state_ == ready) {
+            if (state_ == ready)
+            {
                 return;
             }
             exception_ = exception;
             hasException_ = true;
             state_ = ready;
             cv_.notify_all();
-            if (exceptionCallback_) {
+            if (exceptionCallback_)
+            {
                 exceptionCallback_(exception_);
             }
         }
@@ -77,7 +77,8 @@ namespace fries
         void wait()
         {
             std::unique_lock<std::mutex> lck(mutex_);
-            if (!isReady()) {
+            if (!isReady())
+            {
                 cv_.wait(lck);
             }
         }
@@ -86,7 +87,8 @@ namespace fries
         {
             std::unique_lock<std::mutex> lck(mutex_);
             exceptionCallback_ = callback;
-            if (isReady()) {
+            if (isReady())
+            {
                 // TODO: what if the state is already ready?
             }
         }
@@ -117,14 +119,14 @@ namespace fries
     /**
      * Future implementation class
      */
-    template<typename T>
+    template <typename T>
     class FutureImpl : public FutureImplBase, public std::enable_shared_from_this<FutureImpl<T>>
     {
         using FutureImplPtr = std::shared_ptr<FutureImpl<T>>;
         using FutureCompletionCallback = std::function<void(FutureImplPtr)>;
+
     public:
-        FutureImpl()
-        = default;
+        FutureImpl() = default;
 
         T getValue() const
         {
@@ -135,7 +137,8 @@ namespace fries
         {
             std::unique_lock<std::mutex> lck(mutex_);
             // set value has no effect when the state is ready
-            if (isReady()) {
+            if (isReady())
+            {
                 return;
             }
             value_ = value;
@@ -152,29 +155,33 @@ namespace fries
              */
             std::unique_lock<std::mutex> lck(mutex_);
             completionCallback_ = callback;
-            if (isReady()) {
+            if (isReady())
+            {
                 triggerCallback();
             }
         }
 
-        template<typename F, typename R>
+        template <typename F, typename R>
         void apply(const F &func, std::shared_ptr<FutureImpl<R>> future)
         {
-            try {
+            try
+            {
                 setValue(func(std::move(Future<R>(future))));
-            } catch (std::exception &e) {
+            }
+            catch (std::exception &e)
+            {
                 setException(e);
             }
         }
 
     private:
-
         T value_;
         FutureCompletionCallback completionCallback_ = nullptr;
 
         void triggerCallback()
         {
-            if (completionCallback_) {
+            if (completionCallback_)
+            {
                 completionCallback_(this->shared_from_this());
             }
         }
@@ -183,19 +190,20 @@ namespace fries
     /**
      * Future implementation class for void type
      */
-    template<>
+    template <>
     class FutureImpl<void> : public FutureImplBase, public std::enable_shared_from_this<FutureImpl<void>>
     {
         using FutureImplPtr = std::shared_ptr<FutureImpl<void>>;
         using FutureCompletionCallback = std::function<void(FutureImplPtr)>;
+
     public:
-        FutureImpl()
-        = default;
+        FutureImpl() = default;
 
         void setValue()
         {
             std::unique_lock<std::mutex> lck(mutex_);
-            if (isReady()) {
+            if (isReady())
+            {
                 return;
             }
             setState(ready);
@@ -215,28 +223,33 @@ namespace fries
              */
             std::unique_lock<std::mutex> lck(mutex_);
             completionCallback_ = callback;
-            if (isReady()) {
+            if (isReady())
+            {
                 triggerCallback();
             }
         }
 
-        template<typename F, typename R>
+        template <typename F, typename R>
         void apply(const F &func, std::shared_ptr<FutureImpl<R>> future)
         {
-            try {
+            try
+            {
                 func(std::move(Future<R>(future)));
                 setValue();
-            } catch (std::exception &e) {
+            }
+            catch (std::exception &e)
+            {
                 setException(e);
             }
-        } 
+        }
 
     private:
         FutureCompletionCallback completionCallback_ = nullptr;
 
         void triggerCallback()
         {
-            if (completionCallback_) {
+            if (completionCallback_)
+            {
                 completionCallback_(this->shared_from_this());
             }
         }
@@ -245,7 +258,7 @@ namespace fries
     /**
      * Future interface class
      */
-    template<typename T>
+    template <typename T>
     class Future
     {
         friend class Promise<T>;
@@ -253,23 +266,19 @@ namespace fries
         using FutureImplPtr = std::shared_ptr<FutureImpl<T>>;
 
     public:
-        Future()
-        = default;
+        Future() = default;
 
-        Future(Future<T> &future)
+        Future(Future<T> &future) : future_(future.future_)
         {
-            future_ = future.future_;
         }
 
-        Future(Future<T> &&future) noexcept
+        Future(Future<T> &&future) noexcept : future_(future.future_)
         {
-            future_ = future.future_;
             future.future_.reset();
         }
 
-        explicit Future(FutureImplPtr futureImpl)
+        explicit Future(FutureImplPtr futureImpl) : future_(futureImpl)
         {
-            future_ = futureImpl;
         }
 
         bool isReady() const
@@ -297,7 +306,7 @@ namespace fries
             return future_->getValue();
         }
 
-        template<typename F>
+        template <typename F>
         Future<typename std::result_of<F(Future<T>)>::type> then(const F &func)
         {
             using NextType = typename std::result_of<F(Future<T>)>::type;
@@ -321,7 +330,7 @@ namespace fries
             future_->setExceptionCallback([func, nextFutureImpl](const std::exception &exception) {
                 nextFutureImpl->applyException(func, exception);
             });
-            return std::move(Future<void>(nextFutureImpl));
+            return Future<void>(nextFutureImpl);
         }
 
     private:
@@ -331,7 +340,7 @@ namespace fries
     /**
      * Promise interface class for void type
      */
-    template<>
+    template <>
     class Promise<void>
     {
     public:
@@ -362,7 +371,7 @@ namespace fries
     /**
      * Promise interface class
      */
-    template<typename T>
+    template <typename T>
     class Promise
     {
     public:
@@ -390,6 +399,6 @@ namespace fries
         FutureImplPtr future_;
     };
 
-}
+} // namespace fries
 
 #endif /* FRIES_FUTURE_H */
