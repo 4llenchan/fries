@@ -4,8 +4,8 @@
 //  Created by AllenChan on 2020/12/5.
 //
 
-#ifndef FRIES_FUTURE_H_
-#define FRIES_FUTURE_H_
+#ifndef FRIES_FUTURES_FUTURE_H_
+#define FRIES_FUTURES_FUTURE_H_
 
 #include <condition_variable>
 #include <functional>
@@ -303,4 +303,4 @@ private:
 
 }  // namespace fries
 
-#endif /* FRIES_FUTURE_H_ */
+#endif /* FRIES_FUTURES_FUTURE_H_ */
