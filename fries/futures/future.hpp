@@ -14,15 +14,18 @@
 #include <utility>
 
 namespace fries {
-enum future_state {
-    waiting,
-    ready,
+
+/// \brief Indicates the future's state, inner usage only.
+enum class future_state {
+    waiting,  ///< waiting for fulfill
+    ready,    ///< already has a value, ready to get
 };
 
 // forward definitions
-template <typename T> class promise;
-
-template <typename T> class future;
+template <typename T>
+class promise;
+template <typename T>
+class future;
 
 class future_impl_base {
 public:
@@ -35,23 +38,23 @@ public:
     void set_exception(const std::exception &exception) {
         std::lock_guard<std::mutex> lck(mutex_);
         // set value has no effect when the state is ready
-        if (state_ == ready) {
+        if (state_ == future_state::ready) {
             return;
         }
         exception_ = exception;
         has_exception_ = true;
-        state_ = ready;
+        state_ = future_state::ready;
         cv_.notify_all();
         if (exception_callback_) {
             exception_callback_(exception_);
         }
     }
 
-    const std::exception &get_exception() const { return exception_; }
+    inline const std::exception &get_exception() const { return exception_; }
 
     inline future_state get_state() const { return state_; }
 
-    inline bool is_ready() const { return state_ == ready; }
+    inline bool is_ready() const { return state_ == future_state::ready; }
 
     inline bool has_exception() const { return has_exception_; }
 
@@ -90,9 +93,8 @@ protected:
     future_exception_callback exception_callback_ = nullptr;
 };
 
-/**
- * Future implementation class
- */
+/// \brief Future implementation class
+/// \tparam T The type that future holds
 template <typename T>
 class future_impl : public future_impl_base,
                     public std::enable_shared_from_this<future_impl<T>> {
@@ -111,17 +113,15 @@ public:
             return;
         }
         value_ = value;
-        set_state(ready);
+        set_state(future_state::ready);
         cv_.notify_all();
         trigger_callback();
     }
 
     void set_completion_callback(const future_completion_callback &callback) {
-        /*
-         * set value and set callback could happen in the same time in different
-         * thread. we still want to trigger the callback even if the state is
-         * ready.
-         */
+        // set value and set callback could happen in the same time
+        // in different thread. We still want to trigger the callback
+        // even if the state is already ready.
         std::lock_guard<std::mutex> lck(mutex_);
         completion_callback_ = callback;
         if (is_ready()) {
@@ -149,9 +149,7 @@ private:
     }
 };
 
-/**
- * Future implementation class for void type
- */
+/// \brief Future implementation class for void type
 template <>
 class future_impl<void>
     : public future_impl_base,
@@ -167,19 +165,12 @@ public:
         if (is_ready()) {
             return;
         }
-        set_state(ready);
+        set_state(future_state::ready);
         cv_.notify_all();
         trigger_callback();
     }
 
-    void get_value() {}
-
     void set_completion_callback(const future_completion_callback &callback) {
-        /*
-         * set value and set callback could happen in the same time in different
-         * thread. we still want to trigger the callback even if the state is
-         * ready.
-         */
         std::lock_guard<std::mutex> lck(mutex_);
         completion_callback_ = callback;
         if (is_ready()) {
@@ -207,10 +198,10 @@ private:
     }
 };
 
-/**
- * Future interface class
- */
-template <typename T> class future {
+/// \brief Future interface class
+/// \tparam T The type that future holds
+template <typename T>
+class future {
     friend class promise<T>;
 
     using future_impl_ptr = std::shared_ptr<future_impl<T>>;
@@ -253,8 +244,8 @@ public:
         return std::move(future<next_type>(next_future_impl));
     }
 
-    future<void>
-    capture(const std::function<void(const std::exception &exception)> &func) {
+    future<void> capture(
+        const std::function<void(const std::exception &exception)> &func) {
         auto next_future_impl = std::make_shared<future_impl<void>>();
         impl_->set_completion_callback(
             [next_future_impl](future_impl_ptr impl) {
@@ -271,10 +262,9 @@ private:
     future_impl_ptr impl_;
 };
 
-/**
- * Promise interface class for void type
- */
-template <> class promise<void> {
+/// \brief Promise interface class for void type
+template <>
+class promise<void> {
 public:
     promise() : impl_(std::make_shared<future_impl<void>>()) {}
 
@@ -291,10 +281,10 @@ private:
     future_impl_ptr impl_;
 };
 
-/**
- * Promise interface class
- */
-template <typename T> class promise {
+/// \brief Promise interface class
+/// \tparam T The type that promise holds
+template <typename T>
+class promise {
 public:
     promise() : impl_(std::make_shared<future_impl<T>>()) {}
 
@@ -311,6 +301,6 @@ private:
     future_impl_ptr impl_;
 };
 
-} // namespace fries
+}  // namespace fries
 
 #endif /* FRIES_FUTURE_H_ */

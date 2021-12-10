@@ -1,3 +1,4 @@
-BasedOnStyle: LLVM
+# See https://clang.llvm.org/docs/ClangFormatStyleOptions.html for details
+BasedOnStyle: Google
 AccessModifierOffset: -4
 IndentWidth: 4

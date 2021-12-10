@@ -1,0 +1,3 @@
+# TEST_F in gtest could not pass cert-err58-cpp check
+Checks: '-cert-err58-cpp'
+InheritParentConfig: true

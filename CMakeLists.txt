@@ -11,5 +11,6 @@ set(FRIES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/fries")
 include_directories(.)
 
 if (FRIES_TEST_ENABLE)
+    set(FRIES_TEST_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tests")
     add_subdirectory(tests)
 endif ()
