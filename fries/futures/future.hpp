@@ -73,8 +73,7 @@ public:
         }
     }
 
-    void apply_exception(const std::function<void(std::exception)> &func,
-                         const std::exception &exception) {
+    void apply_exception(const std::function<void(std::exception)> &func, const std::exception &exception) {
         // TODO: how to classify the specific kind of exception?
         func(exception);
         set_exception(exception);
@@ -96,8 +95,7 @@ protected:
 /// \brief Future implementation class
 /// \tparam T The type that future holds
 template <typename T>
-class future_impl : public future_impl_base,
-                    public std::enable_shared_from_this<future_impl<T>> {
+class future_impl : public future_impl_base, public std::enable_shared_from_this<future_impl<T>> {
     using future_impl_ptr = std::shared_ptr<future_impl<T>>;
     using future_completion_callback = std::function<void(future_impl_ptr)>;
 
@@ -151,9 +149,7 @@ private:
 
 /// \brief Future implementation class for void type
 template <>
-class future_impl<void>
-    : public future_impl_base,
-      public std::enable_shared_from_this<future_impl<void>> {
+class future_impl<void> : public future_impl_base, public std::enable_shared_from_this<future_impl<void>> {
     using future_impl_ptr = std::shared_ptr<future_impl<void>>;
     using future_completion_callback = std::function<void(future_impl_ptr)>;
 
@@ -213,16 +209,13 @@ public:
 
     future(future<T> &&other) noexcept : impl_(std::move(other.impl_)) {}
 
-    explicit future(future_impl_ptr future_impl)
-        : impl_(std::move(future_impl)) {}
+    explicit future(future_impl_ptr future_impl) : impl_(std::move(future_impl)) {}
 
     bool is_ready() const { return impl_->is_ready(); }
 
     bool has_exception() const { return impl_->has_exception(); }
 
-    const std::exception &get_exception() const {
-        return impl_->get_exception();
-    }
+    const std::exception &get_exception() const { return impl_->get_exception(); }
 
     void wait() const { impl_->wait(); }
 
@@ -234,27 +227,18 @@ public:
         auto next_future_impl = std::make_shared<future_impl<next_type>>();
         // create a callable object to fulfill next future
         impl_->set_completion_callback(
-            [func, next_future_impl](future_impl_ptr impl) {
-                next_future_impl->apply(func, std::move(impl));
-            });
+            [func, next_future_impl](future_impl_ptr impl) { next_future_impl->apply(func, std::move(impl)); });
         impl_->set_exception_callback(
-            [next_future_impl](const std::exception &exception) {
-                next_future_impl->set_exception(exception);
-            });
+            [next_future_impl](const std::exception &exception) { next_future_impl->set_exception(exception); });
         return std::move(future<next_type>(next_future_impl));
     }
 
-    future<void> capture(
-        const std::function<void(const std::exception &exception)> &func) {
+    future<void> capture(const std::function<void(const std::exception &exception)> &func) {
         auto next_future_impl = std::make_shared<future_impl<void>>();
-        impl_->set_completion_callback(
-            [next_future_impl](future_impl_ptr impl) {
-                next_future_impl->set_value();
-            });
-        impl_->set_exception_callback(
-            [func, next_future_impl](const std::exception &exception) {
-                next_future_impl->apply_exception(func, exception);
-            });
+        impl_->set_completion_callback([next_future_impl](future_impl_ptr impl) { next_future_impl->set_value(); });
+        impl_->set_exception_callback([func, next_future_impl](const std::exception &exception) {
+            next_future_impl->apply_exception(func, exception);
+        });
         return future<void>(next_future_impl);
     }
 
@@ -272,9 +256,7 @@ public:
 
     void set_value() { impl_->set_value(); }
 
-    void set_exception(const std::exception &exception) {
-        impl_->set_exception(exception);
-    }
+    void set_exception(const std::exception &exception) { impl_->set_exception(exception); }
 
 private:
     using future_impl_ptr = std::shared_ptr<future_impl<void>>;
@@ -292,9 +274,7 @@ public:
 
     void set_value(T value) { impl_->set_value(std::move(value)); }
 
-    void set_exception(const std::exception &exception) {
-        impl_->set_exception(exception);
-    }
+    void set_exception(const std::exception &exception) { impl_->set_exception(exception); }
 
 private:
     using future_impl_ptr = std::shared_ptr<future_impl<T>>;

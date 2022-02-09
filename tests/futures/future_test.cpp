@@ -25,22 +25,21 @@ TEST_F(future_test, general) {
     th.detach();
 
     vector<int> seq;
-    auto final_future =
-        f.then([&seq](const future<int> &future) {
-             EXPECT_EQ(future.get_value(), 20);
-             seq.emplace_back(1);
-             return string{"hello"};
-         })
-            .then([&seq](const future<string> &future) {
-                EXPECT_EQ(future.get_value(), "hello");
-                seq.emplace_back(2);
-                return 10;
-            })
-            .then([&seq](const future<int> &future) {
-                EXPECT_EQ(future.get_value(), 10);
-                seq.emplace_back(3);
-            })
-            .then([&seq](const future<void> &future) { seq.emplace_back(4); });
+    auto final_future = f.then([&seq](const future<int> &future) {
+                             EXPECT_EQ(future.get_value(), 20);
+                             seq.emplace_back(1);
+                             return string{"hello"};
+                         })
+                            .then([&seq](const future<string> &future) {
+                                EXPECT_EQ(future.get_value(), "hello");
+                                seq.emplace_back(2);
+                                return 10;
+                            })
+                            .then([&seq](const future<int> &future) {
+                                EXPECT_EQ(future.get_value(), 10);
+                                seq.emplace_back(3);
+                            })
+                            .then([&seq](const future<void> &future) { seq.emplace_back(4); });
     final_future.wait();
     EXPECT_TRUE(final_future.is_ready());
 
@@ -55,9 +54,7 @@ TEST_F(future_test, set_before_then) {
 
     p->set_value();
 
-    f.then([](const future<void> &future) {})
-        .then([](const future<void> &future) {})
-        .wait();
+    f.then([](const future<void> &future) {}).then([](const future<void> &future) {}).wait();
 
     EXPECT_TRUE(true);
 }
@@ -66,16 +63,15 @@ TEST_F(future_test, exception) {
     auto p = make_shared<promise<int>>();
     auto f = p->get_future();
 
-    auto final =
-        f.then([](const future<int> &future) {
-             EXPECT_EQ(future.get_value(), 10);
-             throw std::out_of_range("");
-         })
-            .then([](const future<void> &future) { EXPECT_TRUE(false); })
-            .capture([](const std::exception &exception) {
-                EXPECT_TRUE(true);
-                exception.what();
-            });
+    auto final = f.then([](const future<int> &future) {
+                      EXPECT_EQ(future.get_value(), 10);
+                      throw std::out_of_range("");
+                  })
+                     .then([](const future<void> &future) { EXPECT_TRUE(false); })
+                     .capture([](const std::exception &exception) {
+                         EXPECT_TRUE(true);
+                         exception.what();
+                     });
 
     thread te([p]() {
         this_thread::sleep_for(chrono::seconds(1));
