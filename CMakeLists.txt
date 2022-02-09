@@ -6,11 +6,16 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 option(FRIES_TEST_ENABLE "Enable test target" OFF)
-set(FRIES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/fries")
+set(fries_dir "${CMAKE_CURRENT_SOURCE_DIR}/fries")
+
+#set(src_file
+#        )
+#add_library(fries STATIC ${src_file})
+#target_include_directories(fries PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 include_directories(.)
 
 if (FRIES_TEST_ENABLE)
-    set(FRIES_TEST_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+    set(fries_test_dir "${CMAKE_CURRENT_SOURCE_DIR}/tests")
     add_subdirectory(tests)
 endif ()

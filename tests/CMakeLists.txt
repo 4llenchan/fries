@@ -1,7 +1,6 @@
-cmake_minimum_required(VERSION 3.17)
-
 add_executable(fries_test main.cpp
-        ${FRIES_TEST_DIR}/futures/future_test.cpp)
+        ${fries_test_dir}/futures/future_test.cpp
+        ${fries_test_dir}/system/switcher_test.cpp)
 
 enable_testing()
 find_package(GTest REQUIRED)
