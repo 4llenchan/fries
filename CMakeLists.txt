@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.17)
 
-project(fries VERSION 0.4.0)
+project(fries VERSION 0.5.0)
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -16,6 +16,5 @@ set(fries_dir "${CMAKE_CURRENT_SOURCE_DIR}/fries")
 include_directories(.)
 
 if (FRIES_TEST_ENABLE)
-    set(fries_test_dir "${CMAKE_CURRENT_SOURCE_DIR}/tests")
     add_subdirectory(tests)
 endif ()

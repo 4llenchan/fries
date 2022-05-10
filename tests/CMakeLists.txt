@@ -1,6 +1,8 @@
 add_executable(fries_test main.cpp
-        ${fries_test_dir}/futures/future_test.cpp
-        ${fries_test_dir}/system/switcher_test.cpp)
+        futures/future_test.cpp
+        system/options_test.cpp
+        system/switcher_test.cpp
+        )
 
 enable_testing()
 find_package(GTest REQUIRED)
