@@ -64,3 +64,10 @@ TEST_F(switcher_test, integers) {
     EXPECT_TRUE(true);
   });
 }
+
+TEST_F(switcher_test, done) {
+  int value = 10;
+  bool trigger = false;
+  select(value).found(10, [&trigger]() { trigger = true; }).done();
+  EXPECT_TRUE(trigger);
+}

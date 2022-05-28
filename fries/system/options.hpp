@@ -50,8 +50,10 @@ class options<option_type, typename std::enable_if<std::is_enum<option_type>::va
     return *this;
   }
 
+  /// \brief Returns whether contains a specific option
   inline bool has(option_type option) const { return (options_ & cast_(option)) > 0; }
 
+  /// \brief Exclude the specific option
   inline void exclude(option_type option) { options_ &= ~cast_(option); }
 
  private:

@@ -46,16 +46,20 @@ class switcher {
     return *this;
   }
 
+  /// \brief Will parse the chain after this function call.
   void others(const hit& h) {
     others_ = h;
     done();
   }
 
+  /// \brief Will parse the chain after this function call.
   void others(const hit_with_target& h) {
     others_ = [this, &h]() { h(target_); };
     done();
   }
 
+  /// \brief The select phrase can not parse itself, so if there is no others() call in the end of the chain,
+  /// this done() function must be call to trigger the parsing action.
   void done() {
     auto it = reflections_.find(target_);
     if (it != reflections_.end()) {
